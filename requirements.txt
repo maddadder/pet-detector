@@ -2,3 +2,10 @@ python-dotenv
 opencv-python
 PyQt6
 imutils
+tensorflow==2.13.*
+tensorflow-addons
+tf_slim
+matplotlib
+numpy
+tensorflow_hub
+#tensorflow-object-detection-api

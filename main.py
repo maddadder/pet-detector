@@ -11,6 +11,40 @@ import os
 import imutils
 from dotenv import load_dotenv
 load_dotenv('.env')
+import numpy as np
+import tensorflow as tf
+import tensorflow_hub as hub
+import cv2
+
+# Load the pre-trained model
+module_handle = "faster_rcnn_openimages_v4_inception_resnet_v2_1"
+model = hub.load(module_handle)
+
+# Get the concrete function from the model
+detector = model.signatures['default']
+
+def detect_people(frame):
+
+    image = tf.image.convert_image_dtype(frame, tf.float32)[tf.newaxis]
+    # passing the converted image to the model
+    detections = detector(image)
+
+    detection_classes = detections["detection_class_entities"]
+    detection_scores = detections["detection_scores"]
+
+    detected_people = []
+
+    for i in range(len(detection_scores)):
+        #print(detection_classes[i].numpy().decode("ascii") + ":" + str(detection_scores[i].numpy()))
+        if detection_scores[i] > 0.3:
+            detected_people.append({
+                'class': detection_classes[i].numpy().decode("ascii"),
+                'score': detection_scores[i].numpy(),
+                'bbox': detections['detection_boxes'][i].numpy()
+            })
+
+    return detected_people
+
 
 class CameraWidget(QWidget):
     """Independent camera feed
@@ -62,6 +96,8 @@ class CameraWidget(QWidget):
         def load_network_stream_thread():
             if self.verify_network_stream(self.camera_stream_link):
                 self.capture = cv2.VideoCapture(self.camera_stream_link)
+                self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                self.capture.set( cv2.CAP_PROP_FPS, 2 )
                 self.online = True
         self.load_stream_thread = Thread(target=load_network_stream_thread, args=())
         self.load_stream_thread.daemon = True
@@ -71,6 +107,7 @@ class CameraWidget(QWidget):
         """Attempts to receive a frame from given link"""
 
         cap = cv2.VideoCapture(link)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 0)
         if not cap.isOpened():
             return False
         cap.release()
@@ -85,7 +122,22 @@ class CameraWidget(QWidget):
                     # Read next frame from stream and insert into deque
                     status, frame = self.capture.read()
                     if status:
+                        detected_people = detect_people(frame)
+
+                        for person in detected_people:
+                            bbox = person['bbox']
+                            ymin, xmin, ymax, xmax = bbox
+                            h, w, _ = frame.shape
+                            xmin = int(xmin * w)
+                            xmax = int(xmax * w)
+                            ymin = int(ymin * h)
+                            ymax = int(ymax * h)
+                            label = person['class'] + ":" + str(person['score'])
+                            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+                            cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                        
                         self.deque.append(frame)
+
                     else:
                         self.capture.release()
                         self.online = False
@@ -124,8 +176,8 @@ class CameraWidget(QWidget):
                 self.frame = cv2.resize(frame, (self.screen_width, self.screen_height))
 
             # Add timestamp to cameras
-            cv2.rectangle(self.frame, (self.screen_width-190,0), (self.screen_width,50), color=(0,0,0), thickness=-1)
-            cv2.putText(self.frame, datetime.now().strftime('%H:%M:%S'), (self.screen_width-185,37), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), lineType=cv2.LINE_AA)
+            #cv2.rectangle(self.frame, (self.screen_width-190,0), (self.screen_width,50), color=(0,0,0), thickness=-1)
+            #cv2.putText(self.frame, datetime.now().strftime('%H:%M:%S'), (self.screen_width-185,37), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), lineType=cv2.LINE_AA)
 
             # Convert to pixmap and set to video frame
             self.img = PyQt6.QtGui.QImage(self.frame, self.frame.shape[1], self.frame.shape[0], PyQt6.QtGui.QImage.Format.Format_RGB888).rgbSwapped()
@@ -163,39 +215,41 @@ if __name__ == '__main__':
     # Create Camera Widgets 
     username = os.environ.get('USER_NAME')
     password = os.environ.get('PASSWORD')
+    password2 = os.environ.get('PASSWORD2')
     
     # Stream links
-    camera0 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=1&subtype=1'.format(username, password)
-    camera1 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=2&subtype=1'.format(username, password)
-    camera2 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=3&subtype=1'.format(username, password)
-    camera3 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=4&subtype=1'.format(username, password)
-    camera4 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=5&subtype=1'.format(username, password)
-    camera5 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=6&subtype=1'.format(username, password)
-    camera6 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=7&subtype=1'.format(username, password)
-    camera7 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=8&subtype=1'.format(username, password)
-    
+    #camera0 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=1&subtype=1'.format(username, password)
+    #camera1 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=2&subtype=1'.format(username, password)
+    #camera2 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=3&subtype=1'.format(username, password)
+    #camera3 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=4&subtype=1'.format(username, password)
+    #camera4 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=5&subtype=1'.format(username, password)
+    #camera5 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=6&subtype=1'.format(username, password)
+    #camera6 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=7&subtype=1'.format(username, password)
+    #camera7 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=8&subtype=1'.format(username, password)
+    camera8 = 'rtsp://{}:{}@192.168.4.81:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     # Create camera widgets
     print('Creating Camera Widgets...')
-    zero = CameraWidget(screen_width//3, screen_height//3, camera0)
-    one = CameraWidget(screen_width//3, screen_height//3, camera1)
-    two = CameraWidget(screen_width//3, screen_height//3, camera2)
-    three = CameraWidget(screen_width//3, screen_height//3, camera3)
-    four = CameraWidget(screen_width//3, screen_height//3, camera4)
-    five = CameraWidget(screen_width//3, screen_height//3, camera5)
-    six = CameraWidget(screen_width//3, screen_height//3, camera6)
-    seven = CameraWidget(screen_width//3, screen_height//3, camera7)
+    #zero = CameraWidget(screen_width//3, screen_height//3, camera0)
+    #one = CameraWidget(screen_width//3, screen_height//3, camera1)
+    #two = CameraWidget(screen_width//3, screen_height//3, camera2)
+    #three = CameraWidget(screen_width//3, screen_height//3, camera3)
+    #four = CameraWidget(screen_width//3, screen_height//3, camera4)
+    #five = CameraWidget(screen_width//3, screen_height//3, camera5)
+    #six = CameraWidget(screen_width//3, screen_height//3, camera6)
+    #seven = CameraWidget(screen_width//3, screen_height//3, camera7)
+    eight = CameraWidget(screen_width//3, screen_height//3, camera8)
     
     # Add widgets to layout
     print('Adding widgets to layout...')
-    ml.addWidget(zero.get_video_frame(),0,0,1,1)
-    ml.addWidget(one.get_video_frame(),0,1,1,1)
-    ml.addWidget(two.get_video_frame(),0,2,1,1)
-    ml.addWidget(three.get_video_frame(),1,0,1,1)
-    ml.addWidget(four.get_video_frame(),1,1,1,1)
-    ml.addWidget(five.get_video_frame(),1,2,1,1)
-    ml.addWidget(six.get_video_frame(),2,0,1,1)
-    ml.addWidget(seven.get_video_frame(),2,1,1,1)
-
+    #ml.addWidget(zero.get_video_frame(),0,0,1,1)
+    #ml.addWidget(one.get_video_frame(),0,1,1,1)
+    #ml.addWidget(two.get_video_frame(),0,2,1,1)
+    #ml.addWidget(three.get_video_frame(),1,0,1,1)
+    #ml.addWidget(four.get_video_frame(),1,1,1,1)
+    #ml.addWidget(five.get_video_frame(),1,2,1,1)
+    #ml.addWidget(six.get_video_frame(),2,0,1,1)
+    #ml.addWidget(seven.get_video_frame(),2,1,1,1)
+    ml.addWidget(eight.get_video_frame(),2,2,1,1)
     print('Verifying camera credentials...')
 
     mw.show()

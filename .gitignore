@@ -158,3 +158,8 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+cuda-repo-ubuntu2204-12-2-local_12.2.1-535.86.10-1_amd64.deb
+faster_rcnn_openimages_v4_inception_resnet_v2_1.tar.gz
+faster_rcnn_resnet50_v1_640x640_1.tar.gz
+faster_rcnn_openimages_v4_inception_resnet_v2_1/*
+faster_rcnn_resnet50_v1_640x640_1/*
