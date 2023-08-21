@@ -23,6 +23,10 @@ model = hub.load(module_handle)
 # Get the concrete function from the model
 detector = model.signatures['default']
 
+frame_skip_interval = 5  # Process every 5th frame
+
+frame_count = 0
+
 def detect_people(frame):
 
     image = tf.image.convert_image_dtype(frame, tf.float32)[tf.newaxis]
@@ -122,6 +126,11 @@ class CameraWidget(QWidget):
                     # Read next frame from stream and insert into deque
                     status, frame = self.capture.read()
                     if status:
+
+                        #Process every frame_skip_interval frame
+                        if frame_count % frame_skip_interval != 0:
+                            continue
+
                         detected_people = detect_people(frame)
 
                         for person in detected_people:

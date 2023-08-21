@@ -168,3 +168,5 @@ ssd_mobilenet_v2_320x320_coco17_tpu-8/*
 faster_rcnn_resnet50_v1_640x640_coco17_tpu-8/*
 
 faster_rcnn_resnet50_v1_640x640_coco17_tpu-8.tar.gz
+ssd_mobilenet_v2_fpnlite_640x640_coco17_tpu-8.tar.gz
+ssd_mobilenet_v2_fpnlite_640x640_coco17_tpu-8/*

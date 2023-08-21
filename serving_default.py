@@ -15,6 +15,9 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_hub as hub
 import cv2
+import os
+
+beep = lambda x: os.system("echo -n '\a';sleep 0.2;" * x)
 
 def read_file_and_split(filename):
     try:
@@ -28,7 +31,7 @@ def read_file_and_split(filename):
     
 # Load the pre-trained model
 #module_handle = "faster_rcnn_resnet50_v1_640x640_1"
-module_handle = "ssd_mobilenet_v2_320x320_coco17_tpu-8/saved_model"
+module_handle = "ssd_mobilenet_v2_fpnlite_640x640_coco17_tpu-8/saved_model"
 model = hub.load(module_handle)
 
 # Get the concrete function from the model
@@ -37,8 +40,12 @@ detector = model.signatures['serving_default']
 
 class_names = read_file_and_split('coco-labels-paper.txt')
 
+frame_skip_interval = 1  # Process every 1 frame
+
+frame_count = 0
+
 def detect_people(frame):
-    #frame = preprocess_image(frame)
+    frame = cv2.resize(frame, (320, 320))
     input_tensor = tf.convert_to_tensor(frame, dtype=tf.uint8)
     input_tensor = tf.expand_dims(input_tensor, axis=0)
     detections = detector(input_tensor)
@@ -50,13 +57,17 @@ def detect_people(frame):
     detected_people = []
 
     for i in range(detection_boxes.shape[0]):
-        #print(detection_classes[i].decode("ascii") + ":" + str(detection_scores[i]))
-        if detection_scores[i] > 0.5:
+        class_id = detection_classes[i]
+        classname = (class_names[class_id] if class_id < len(class_names) else str(class_id))
+        if classname != 'cat' and classname != 'bird' and classname != 'teddy bear':
+            continue
+        if detection_scores[i] > 0.175:
             detected_people.append({
                 'class_id': detection_classes[i],
                 'score': detection_scores[i],
                 'bbox': detection_boxes[i]
             })
+            beep(1)
 
     return detected_people
 
@@ -138,19 +149,25 @@ class CameraWidget(QWidget):
                     # Read next frame from stream and insert into deque
                     status, frame = self.capture.read()
                     if status:
+
+                        #Process every frame_skip_interval frame
+                        if frame_count % frame_skip_interval != 0:
+                            continue
+
                         detected_people = detect_people(frame)
 
                         for person in detected_people:
                             bbox = person['bbox']
                             class_id = person['class_id']
-                            score = str(person['score'])
+                            classname = (class_names[class_id] if class_id < len(class_names) else str(class_id))
+                            score = str(round(person['score'],3))
                             ymin, xmin, ymax, xmax = bbox
                             h, w, _ = frame.shape
                             xmin = int(xmin * w)
                             xmax = int(xmax * w)
                             ymin = int(ymin * h)
                             ymax = int(ymax * h)
-                            label = (class_names[class_id] if class_id < len(class_names) else str(class_id)) + ":" + score
+                            label = classname + ":" + score
                             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
                             cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                         
@@ -251,10 +268,10 @@ if __name__ == '__main__':
     camera0 = 'rtsp://{}:{}@192.168.4.70:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     camera1 = 'rtsp://{}:{}@192.168.4.60:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     camera2 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=3&subtype=1'.format(username, password)
-    camera3 = 'rtsp://{}:{}@192.168.4.94:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
-    camera4 = 'rtsp://{}:{}@192.168.4.113:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
-    camera5 = 'rtsp://{}:{}@192.168.4.55:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
-    camera6 = 'rtsp://{}:{}@192.168.4.148:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    #camera3 = 'rtsp://{}:{}@192.168.4.94:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    #camera4 = 'rtsp://{}:{}@192.168.4.113:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    #camera5 = 'rtsp://{}:{}@192.168.4.55:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    #camera6 = 'rtsp://{}:{}@192.168.4.148:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     camera7 = 'rtsp://{}:{}@192.168.4.57:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     camera8 = 'rtsp://{}:{}@192.168.4.81:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     # Create camera widgets
@@ -262,10 +279,10 @@ if __name__ == '__main__':
     zero = CameraWidget(screen_width//3, screen_height//3, camera0)
     one = CameraWidget(screen_width//3, screen_height//3, camera1)
     two = CameraWidget(screen_width//3, screen_height//3, camera2)
-    three = CameraWidget(screen_width//3, screen_height//3, camera3)
-    four = CameraWidget(screen_width//3, screen_height//3, camera4)
-    five = CameraWidget(screen_width//3, screen_height//3, camera5)
-    six = CameraWidget(screen_width//3, screen_height//3, camera6)
+    #three = CameraWidget(screen_width//3, screen_height//3, camera3)
+    #four = CameraWidget(screen_width//3, screen_height//3, camera4)
+    #five = CameraWidget(screen_width//3, screen_height//3, camera5)
+    #six = CameraWidget(screen_width//3, screen_height//3, camera6)
     seven = CameraWidget(screen_width//3, screen_height//3, camera7)
     eight = CameraWidget(screen_width//3, screen_height//3, camera8)
     
@@ -274,10 +291,10 @@ if __name__ == '__main__':
     ml.addWidget(zero.get_video_frame(),0,0,1,1)
     ml.addWidget(one.get_video_frame(),0,1,1,1)
     ml.addWidget(two.get_video_frame(),0,2,1,1)
-    ml.addWidget(three.get_video_frame(),1,0,1,1)
-    ml.addWidget(four.get_video_frame(),1,1,1,1)
-    ml.addWidget(five.get_video_frame(),1,2,1,1)
-    ml.addWidget(six.get_video_frame(),2,0,1,1)
+    #ml.addWidget(three.get_video_frame(),1,0,1,1)
+    #ml.addWidget(four.get_video_frame(),1,1,1,1)
+    #ml.addWidget(five.get_video_frame(),1,2,1,1)
+    #ml.addWidget(six.get_video_frame(),2,0,1,1)
     ml.addWidget(seven.get_video_frame(),2,1,1,1)
     ml.addWidget(eight.get_video_frame(),2,2,1,1)
     print('Verifying camera credentials...')
