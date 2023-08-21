@@ -138,6 +138,18 @@ class CameraWidget(QWidget):
                         
                         self.deque.append(frame)
 
+                        # Automatically skip to the next frame
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+
                     else:
                         self.capture.release()
                         self.online = False

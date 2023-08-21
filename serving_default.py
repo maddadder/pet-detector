@@ -156,6 +156,18 @@ class CameraWidget(QWidget):
                         
                         self.deque.append(frame)
 
+                        # Automatically skip to the next frame
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        self.capture.grab()
+                        
                     else:
                         self.capture.release()
                         self.online = False
@@ -236,14 +248,14 @@ if __name__ == '__main__':
     password2 = os.environ.get('PASSWORD2')
     
     # Stream links
-    camera0 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=1&subtype=1'.format(username, password)
-    camera1 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=2&subtype=1'.format(username, password)
+    camera0 = 'rtsp://{}:{}@192.168.4.70:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera1 = 'rtsp://{}:{}@192.168.4.60:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     camera2 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=3&subtype=1'.format(username, password)
-    camera3 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=4&subtype=1'.format(username, password)
-    camera4 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=5&subtype=1'.format(username, password)
-    camera5 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=6&subtype=1'.format(username, password)
-    camera6 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=7&subtype=1'.format(username, password)
-    camera7 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=8&subtype=1'.format(username, password)
+    camera3 = 'rtsp://{}:{}@192.168.4.94:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera4 = 'rtsp://{}:{}@192.168.4.113:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera5 = 'rtsp://{}:{}@192.168.4.55:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera6 = 'rtsp://{}:{}@192.168.4.148:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera7 = 'rtsp://{}:{}@192.168.4.57:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     camera8 = 'rtsp://{}:{}@192.168.4.81:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     # Create camera widgets
     print('Creating Camera Widgets...')
