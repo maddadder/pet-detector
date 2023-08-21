@@ -27,7 +27,8 @@ def read_file_and_split(filename):
         return []
     
 # Load the pre-trained model
-module_handle = "faster_rcnn_resnet50_v1_640x640_1"
+#module_handle = "faster_rcnn_resnet50_v1_640x640_1"
+module_handle = "ssd_mobilenet_v2_320x320_coco17_tpu-8/saved_model"
 model = hub.load(module_handle)
 
 # Get the concrete function from the model
@@ -149,7 +150,7 @@ class CameraWidget(QWidget):
                             xmax = int(xmax * w)
                             ymin = int(ymin * h)
                             ymax = int(ymax * h)
-                            label = (class_names[class_id] if class_id < len(class_names) else "Unknown") + ":" + score
+                            label = (class_names[class_id] if class_id < len(class_names) else str(class_id)) + ":" + score
                             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
                             cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                         
@@ -235,37 +236,37 @@ if __name__ == '__main__':
     password2 = os.environ.get('PASSWORD2')
     
     # Stream links
-    #camera0 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=1&subtype=1'.format(username, password)
-    #camera1 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=2&subtype=1'.format(username, password)
-    #camera2 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=3&subtype=1'.format(username, password)
-    #camera3 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=4&subtype=1'.format(username, password)
-    #camera4 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=5&subtype=1'.format(username, password)
-    #camera5 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=6&subtype=1'.format(username, password)
-    #camera6 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=7&subtype=1'.format(username, password)
-    #camera7 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=8&subtype=1'.format(username, password)
+    camera0 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=1&subtype=1'.format(username, password)
+    camera1 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=2&subtype=1'.format(username, password)
+    camera2 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=3&subtype=1'.format(username, password)
+    camera3 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=4&subtype=1'.format(username, password)
+    camera4 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=5&subtype=1'.format(username, password)
+    camera5 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=6&subtype=1'.format(username, password)
+    camera6 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=7&subtype=1'.format(username, password)
+    camera7 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=8&subtype=1'.format(username, password)
     camera8 = 'rtsp://{}:{}@192.168.4.81:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     # Create camera widgets
     print('Creating Camera Widgets...')
-    #zero = CameraWidget(screen_width//3, screen_height//3, camera0)
-    #one = CameraWidget(screen_width//3, screen_height//3, camera1)
-    #two = CameraWidget(screen_width//3, screen_height//3, camera2)
-    #three = CameraWidget(screen_width//3, screen_height//3, camera3)
-    #four = CameraWidget(screen_width//3, screen_height//3, camera4)
-    #five = CameraWidget(screen_width//3, screen_height//3, camera5)
-    #six = CameraWidget(screen_width//3, screen_height//3, camera6)
-    #seven = CameraWidget(screen_width//3, screen_height//3, camera7)
+    zero = CameraWidget(screen_width//3, screen_height//3, camera0)
+    one = CameraWidget(screen_width//3, screen_height//3, camera1)
+    two = CameraWidget(screen_width//3, screen_height//3, camera2)
+    three = CameraWidget(screen_width//3, screen_height//3, camera3)
+    four = CameraWidget(screen_width//3, screen_height//3, camera4)
+    five = CameraWidget(screen_width//3, screen_height//3, camera5)
+    six = CameraWidget(screen_width//3, screen_height//3, camera6)
+    seven = CameraWidget(screen_width//3, screen_height//3, camera7)
     eight = CameraWidget(screen_width//3, screen_height//3, camera8)
     
     # Add widgets to layout
     print('Adding widgets to layout...')
-    #ml.addWidget(zero.get_video_frame(),0,0,1,1)
-    #ml.addWidget(one.get_video_frame(),0,1,1,1)
-    #ml.addWidget(two.get_video_frame(),0,2,1,1)
-    #ml.addWidget(three.get_video_frame(),1,0,1,1)
-    #ml.addWidget(four.get_video_frame(),1,1,1,1)
-    #ml.addWidget(five.get_video_frame(),1,2,1,1)
-    #ml.addWidget(six.get_video_frame(),2,0,1,1)
-    #ml.addWidget(seven.get_video_frame(),2,1,1,1)
+    ml.addWidget(zero.get_video_frame(),0,0,1,1)
+    ml.addWidget(one.get_video_frame(),0,1,1,1)
+    ml.addWidget(two.get_video_frame(),0,2,1,1)
+    ml.addWidget(three.get_video_frame(),1,0,1,1)
+    ml.addWidget(four.get_video_frame(),1,1,1,1)
+    ml.addWidget(five.get_video_frame(),1,2,1,1)
+    ml.addWidget(six.get_video_frame(),2,0,1,1)
+    ml.addWidget(seven.get_video_frame(),2,1,1,1)
     ml.addWidget(eight.get_video_frame(),2,2,1,1)
     print('Verifying camera credentials...')
 

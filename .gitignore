@@ -163,3 +163,5 @@ faster_rcnn_openimages_v4_inception_resnet_v2_1.tar.gz
 faster_rcnn_resnet50_v1_640x640_1.tar.gz
 faster_rcnn_openimages_v4_inception_resnet_v2_1/*
 faster_rcnn_resnet50_v1_640x640_1/*
+ssd_mobilenet_v2_320x320_coco17_tpu-8.tar.gz
+ssd_mobilenet_v2_320x320_coco17_tpu-8/*
