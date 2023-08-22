@@ -40,9 +40,7 @@ detector = model.signatures['serving_default']
 
 class_names = read_file_and_split('coco-labels-paper.txt')
 
-frame_skip_interval = 1  # Process every 1 frame
 
-frame_count = 0
 
 def detect_people(frame):
     frame = cv2.resize(frame, (320, 320))
@@ -59,9 +57,11 @@ def detect_people(frame):
     for i in range(detection_boxes.shape[0]):
         class_id = detection_classes[i]
         classname = (class_names[class_id] if class_id < len(class_names) else str(class_id))
-        if classname != 'cat' and classname != 'bird' and classname != 'teddy bear':
+        #if classname != 'cat' and classname != 'bird' and classname != 'teddy bear':
+        #    continue
+        if classname != 'bird':
             continue
-        if detection_scores[i] > 0.175:
+        if detection_scores[i] > 0.2:
             detected_people.append({
                 'class_id': detection_classes[i],
                 'score': detection_scores[i],
@@ -102,7 +102,8 @@ class CameraWidget(QWidget):
         self.online = False
         self.capture = None
         self.video_frame = QLabel()
-
+        self.frame_skip_interval = 10  # Process every 1 frame
+        self.frame_count = 0
         self.load_network_stream()
         
         # Start background frame grabbing
@@ -149,11 +150,13 @@ class CameraWidget(QWidget):
                     # Read next frame from stream and insert into deque
                     status, frame = self.capture.read()
                     if status:
-
+                        
+                        self.frame_count += 1
                         #Process every frame_skip_interval frame
-                        if frame_count % frame_skip_interval != 0:
+                        if self.frame_count % self.frame_skip_interval != 0:
+                            self.capture.grab()
                             continue
-
+                        
                         detected_people = detect_people(frame)
 
                         for person in detected_people:
@@ -170,20 +173,15 @@ class CameraWidget(QWidget):
                             label = classname + ":" + score
                             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
                             cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                        
-                        self.deque.append(frame)
+                            
+                            # Get the current date and time
+                            current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-                        # Automatically skip to the next frame
-                        self.capture.grab()
-                        self.capture.grab()
-                        self.capture.grab()
-                        self.capture.grab()
-                        self.capture.grab()
-                        self.capture.grab()
-                        self.capture.grab()
-                        self.capture.grab()
-                        self.capture.grab()
-                        self.capture.grab()
+                            # Save the frame with detections to disk
+                            filename = f"detected/detection_frame_{current_datetime}_{classname}.jpg"
+                            cv2.imwrite(filename, frame)
+
+                        self.deque.append(frame)
                         
                     else:
                         self.capture.release()
