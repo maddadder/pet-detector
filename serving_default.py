@@ -31,7 +31,7 @@ def read_file_and_split(filename):
     
 # Load the pre-trained model
 #module_handle = "faster_rcnn_resnet50_v1_640x640_1"
-module_handle = "ssd_mobilenet_v2_fpnlite_640x640_coco17_tpu-8/saved_model"
+module_handle = "faster_rcnn_resnet152_v1_1024x1024_1"
 model = hub.load(module_handle)
 
 # Get the concrete function from the model
@@ -43,7 +43,7 @@ class_names = read_file_and_split('coco-labels-paper.txt')
 
 
 def detect_people(frame):
-    frame = cv2.resize(frame, (320, 320))
+    #frame = cv2.resize(frame, (1024, 1024))
     input_tensor = tf.convert_to_tensor(frame, dtype=tf.uint8)
     input_tensor = tf.expand_dims(input_tensor, axis=0)
     detections = detector(input_tensor)
@@ -57,17 +57,19 @@ def detect_people(frame):
     for i in range(detection_boxes.shape[0]):
         class_id = detection_classes[i]
         classname = (class_names[class_id] if class_id < len(class_names) else str(class_id))
-        #if classname != 'cat' and classname != 'bird' and classname != 'teddy bear':
-        #    continue
-        if classname != 'bird':
+        if classname != 'horse' and classname != 'dog' and classname != 'cat' and classname != 'bird' and classname != 'toothbrush' and classname != 'teddy bear': 
             continue
-        if detection_scores[i] > 0.2:
+        #if classname != 'bird':
+        #    continue
+        if detection_scores[i] > 0.13:
             detected_people.append({
                 'class_id': detection_classes[i],
                 'score': detection_scores[i],
                 'bbox': detection_boxes[i]
             })
-            beep(1)
+        elif detection_scores[i] > 0.09:
+            print(f"{classname} with low score of {detection_scores[i]}")
+            
 
     return detected_people
 
@@ -158,28 +160,41 @@ class CameraWidget(QWidget):
                             continue
                         
                         detected_people = detect_people(frame)
-
+                        min_box_size = 0.0001  # Minimum area percentage of the frame
+                        max_box_size = 0.02   # Maximum area percentage of the frame
+    
                         for person in detected_people:
                             bbox = person['bbox']
                             class_id = person['class_id']
+
                             classname = (class_names[class_id] if class_id < len(class_names) else str(class_id))
                             score = str(round(person['score'],3))
+                            
+
                             ymin, xmin, ymax, xmax = bbox
                             h, w, _ = frame.shape
                             xmin = int(xmin * w)
                             xmax = int(xmax * w)
                             ymin = int(ymin * h)
                             ymax = int(ymax * h)
-                            label = classname + ":" + score
-                            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-                            cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                            
-                            # Get the current date and time
-                            current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            # Calculate bounding box area as a percentage of the frame
+                            box_area = (xmax - xmin) * (ymax - ymin) / (w * h)
 
-                            # Save the frame with detections to disk
-                            filename = f"detected/detection_frame_{current_datetime}_{classname}.jpg"
-                            cv2.imwrite(filename, frame)
+                            label = classname + ":" + score
+                            # Filter detections based on box area thresholds
+                            if min_box_size < box_area < max_box_size:
+                                cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+                                cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                            
+                                # Get the current date and time
+                                current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+                                # Save the frame with detections to disk
+                                filename = f"detected/detection_frame_{current_datetime}_{classname}_{score}.jpg"
+                                cv2.imwrite(filename, frame)
+                                beep(1)
+                            else:
+                                print(f"{classname} with box area {box_area}")
 
                         self.deque.append(frame)
                         
@@ -263,15 +278,15 @@ if __name__ == '__main__':
     password2 = os.environ.get('PASSWORD2')
     
     # Stream links
-    camera0 = 'rtsp://{}:{}@192.168.4.70:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
-    camera1 = 'rtsp://{}:{}@192.168.4.60:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
-    camera2 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=3&subtype=1'.format(username, password)
+    camera0 = 'rtsp://{}:{}@192.168.4.70:554/cam/realmonitor?channel=1&subtype=0'.format(username, password2)
+    camera1 = 'rtsp://{}:{}@192.168.4.60:554/cam/realmonitor?channel=1&subtype=0'.format(username, password2)
+    camera2 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=3&subtype=0'.format(username, password)
     #camera3 = 'rtsp://{}:{}@192.168.4.94:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     #camera4 = 'rtsp://{}:{}@192.168.4.113:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     #camera5 = 'rtsp://{}:{}@192.168.4.55:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     #camera6 = 'rtsp://{}:{}@192.168.4.148:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
-    camera7 = 'rtsp://{}:{}@192.168.4.57:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
-    camera8 = 'rtsp://{}:{}@192.168.4.81:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera7 = 'rtsp://{}:{}@192.168.4.57:554/cam/realmonitor?channel=1&subtype=0'.format(username, password2)
+    camera8 = 'rtsp://{}:{}@192.168.4.81:554/cam/realmonitor?channel=1&subtype=0'.format(username, password2)
     # Create camera widgets
     print('Creating Camera Widgets...')
     zero = CameraWidget(screen_width//3, screen_height//3, camera0)

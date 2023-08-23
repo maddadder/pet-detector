@@ -17,4 +17,5 @@ python main.py
 #Download https://tfhub.dev/google/faster_rcnn/openimages_v4/inception_resnet_v2/1
 
 # install cuda
+# sudo ubuntu-drivers autoinstall
 # https://www.tensorflow.org/install/pip
