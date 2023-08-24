@@ -61,14 +61,24 @@ def detect_people(frame):
             continue
         #if classname != 'bird':
         #    continue
-        if detection_scores[i] > 0.13:
-            detected_people.append({
-                'class_id': detection_classes[i],
-                'score': detection_scores[i],
-                'bbox': detection_boxes[i]
-            })
-        elif detection_scores[i] > 0.09:
-            print(f"{classname} with low score of {detection_scores[i]}")
+        if classname == 'bird':
+            if detection_scores[i] > 0.5:
+                detected_people.append({
+                    'class_id': detection_classes[i],
+                    'score': detection_scores[i],
+                    'bbox': detection_boxes[i]
+                })
+            elif detection_scores[i] > 0.09 and detection_scores[i] < 0.5:
+                print(f"{classname} with low score of {detection_scores[i]}")
+        else:
+            if detection_scores[i] > 0.13:
+                detected_people.append({
+                    'class_id': detection_classes[i],
+                    'score': detection_scores[i],
+                    'bbox': detection_boxes[i]
+                })
+            elif detection_scores[i] > 0.09 and detection_scores[i] < 0.13:
+                print(f"{classname} with low score of {detection_scores[i]}")
             
 
     return detected_people
@@ -180,7 +190,7 @@ class CameraWidget(QWidget):
                             # Calculate bounding box area as a percentage of the frame
                             box_area = (xmax - xmin) * (ymax - ymin) / (w * h)
 
-                            label = classname + ":" + score
+                            label = classname + "__" + score
                             # Filter detections based on box area thresholds
                             if min_box_size < box_area < max_box_size:
                                 cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
@@ -190,11 +200,12 @@ class CameraWidget(QWidget):
                                 current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
 
                                 # Save the frame with detections to disk
-                                filename = f"detected/detection_frame_{current_datetime}_{classname}_{score}.jpg"
+                                filename = f"detected/detection_frame_{score}_{current_datetime}_{classname}.jpg"
                                 cv2.imwrite(filename, frame)
                                 beep(1)
                             else:
                                 print(f"{classname} with box area {box_area}")
+                            break
 
                         self.deque.append(frame)
                         
@@ -240,7 +251,8 @@ class CameraWidget(QWidget):
             #cv2.putText(self.frame, datetime.now().strftime('%H:%M:%S'), (self.screen_width-185,37), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255,255,255), lineType=cv2.LINE_AA)
 
             # Convert to pixmap and set to video frame
-            self.img = PyQt6.QtGui.QImage(self.frame, self.frame.shape[1], self.frame.shape[0], PyQt6.QtGui.QImage.Format.Format_RGB888).rgbSwapped()
+            bytes_per_line = 3 * self.frame.shape[1]
+            self.img = PyQt6.QtGui.QImage(self.frame, self.frame.shape[1], self.frame.shape[0], bytes_per_line, PyQt6.QtGui.QImage.Format.Format_RGB888).rgbSwapped()
             self.pix = PyQt6.QtGui.QPixmap.fromImage(self.img)
             self.video_frame.setPixmap(self.pix)
 
