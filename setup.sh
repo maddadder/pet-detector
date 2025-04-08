@@ -1,14 +1,18 @@
 sudo apt-get install qt6-tools-dev
 sudo apt install libxcb-cursor0
+cd /home/alice/git3/pet-detector
+conda create -n tf
 
 cd /home/alice/git3/pet-detector
+source ~/miniconda3/bin/activate
 conda activate tf
 pip install -r requirements.txt
 
 cd /home/alice/git3/pet-detector
+source ~/miniconda3/bin/activate
 conda activate tf
 
-python main.py
+python3 main.py
 
 
 

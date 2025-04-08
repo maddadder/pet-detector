@@ -2,10 +2,13 @@ python-dotenv
 opencv-python
 PyQt6
 imutils
-tensorflow==2.13.*
+tensorflow[and-cuda]==2.19.0
 tensorflow-addons
 tf_slim
 matplotlib
 numpy
-tensorflow_hub
+tensorflow-hub
+opentimestamps
+opentimestamps-client
+requests
 #tensorflow-object-detection-api
