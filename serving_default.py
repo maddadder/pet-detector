@@ -84,7 +84,8 @@ class CameraWidget(QWidget):
         self.stream_index = stream_index
         self.output_dir = f"detected/{self.stream_index}"
         # Ensure the output directory exists
-        os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(f"{self.output_dir}/original", exist_ok=True)
+        os.makedirs(f"{self.output_dir}/boxed", exist_ok=True)
         self.notary_url = "https://a.pool.opentimestamps.org"
 
         # Flag to check if camera is valid/working
@@ -113,7 +114,7 @@ class CameraWidget(QWidget):
         frame_hash_hex = frame_hash.hex()
 
         # Write the original frame bytes directly to disk
-        image_file_path = os.path.join(self.output_dir, f"{current_datetime}_{frame_hash_hex}_original.jpg")
+        image_file_path = os.path.join(self.output_dir, f"original/{current_datetime}_{frame_hash_hex}.jpg")
         with open(image_file_path, 'wb') as f:
             f.write(frame_bytes)
         logging.info(f"Original frame bytes saved to {image_file_path}")
@@ -214,7 +215,7 @@ class CameraWidget(QWidget):
                 # Convert the frame hash to a hexadecimal string
                 frame_hash_hex = frame_hash.hex()
                 # Save the frame with detections to disk
-                image_file_path = os.path.join(self.output_dir, f"{current_datetime}_{frame_hash_hex}_boxed.jpg")
+                image_file_path = os.path.join(self.output_dir, f"boxed/{current_datetime}_{frame_hash_hex}.jpg")
                 #image_file_path = f"detected/detection_frame_{score}_{current_datetime}_{classname}.jpg"
                 cv2.imwrite(image_file_path, frame)
                 beep(1)
