@@ -15,9 +15,33 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_hub as hub
 import cv2
-import os
+from opentimestamps.core.timestamp import Timestamp, OpSet
+from opentimestamps.core.op import OpSHA256
+from opentimestamps.core.serialize import StreamSerializationContext
+from opentimestamps.calendar import RemoteCalendar
+from queue import Queue, Empty
+import hashlib
+import logging
+from CustomDetachedTimestampFile import CustomDetachedTimestampFile
+import requests
+
+# Set up logging
+#logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 beep = lambda x: os.system("echo -n '\a';sleep 0.2;" * x)
+OPERATION_MODE = os.environ.get('OPERATION_MODE', 'none')
+
+HEADER_MAGIC = b'\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94'
+    
+# Load the pre-trained model
+#module_handle = "faster_rcnn_resnet50_v1_640x640_1"
+module_handle = "ssd_mobilenet_v2_320x320_coco17_tpu-8"
+model = hub.load(module_handle)
+
+# Get the concrete function from the model
+
+detector = model.signatures['serving_default']
+
 
 def read_file_and_split(filename):
     try:
@@ -28,60 +52,8 @@ def read_file_and_split(filename):
     except FileNotFoundError:
         print(f"The file '{filename}' does not exist.")
         return []
-    
-# Load the pre-trained model
-#module_handle = "faster_rcnn_resnet50_v1_640x640_1"
-module_handle = "faster_rcnn_resnet152_v1_1024x1024_1"
-model = hub.load(module_handle)
-
-# Get the concrete function from the model
-
-detector = model.signatures['serving_default']
 
 class_names = read_file_and_split('coco-labels-paper.txt')
-
-
-
-def detect_people(frame):
-    #frame = cv2.resize(frame, (1024, 1024))
-    input_tensor = tf.convert_to_tensor(frame, dtype=tf.uint8)
-    input_tensor = tf.expand_dims(input_tensor, axis=0)
-    detections = detector(input_tensor)
-
-    detection_boxes = detections["detection_boxes"][0].numpy()
-    detection_classes = detections["detection_classes"][0].numpy().astype(np.uint32)
-    detection_scores = detections["detection_scores"][0].numpy()
-
-    detected_people = []
-
-    for i in range(detection_boxes.shape[0]):
-        class_id = detection_classes[i]
-        classname = (class_names[class_id] if class_id < len(class_names) else str(class_id))
-        if classname != 'horse' and classname != 'dog' and classname != 'cat' and classname != 'bird' and classname != 'toothbrush' and classname != 'teddy bear': 
-            continue
-        #if classname != 'bird':
-        #    continue
-        if classname == 'bird':
-            if detection_scores[i] > 0.5:
-                detected_people.append({
-                    'class_id': detection_classes[i],
-                    'score': detection_scores[i],
-                    'bbox': detection_boxes[i]
-                })
-            elif detection_scores[i] > 0.09 and detection_scores[i] < 0.5:
-                print(f"{classname} with low score of {detection_scores[i]}")
-        else:
-            if detection_scores[i] > 0.13:
-                detected_people.append({
-                    'class_id': detection_classes[i],
-                    'score': detection_scores[i],
-                    'bbox': detection_boxes[i]
-                })
-            elif detection_scores[i] > 0.09 and detection_scores[i] < 0.13:
-                print(f"{classname} with low score of {detection_scores[i]}")
-            
-
-    return detected_people
 
 
     
@@ -95,7 +67,7 @@ class CameraWidget(QWidget):
     @param aspect_ratio - Whether to maintain frame aspect ratio or force into fraame
     """
     
-    def __init__(self, width, height, stream_link=0, aspect_ratio=False, parent=None, deque_size=1):
+    def __init__(self, width, height, stream_link=0, stream_index=0, aspect_ratio=False, parent=None, deque_size=1):
         super(CameraWidget, self).__init__(parent)
         
         # Initialize deque used to store frames read from the stream
@@ -109,6 +81,11 @@ class CameraWidget(QWidget):
         self.maintain_aspect_ratio = aspect_ratio
 
         self.camera_stream_link = stream_link
+        self.stream_index = stream_index
+        self.output_dir = f"detected/{self.stream_index}"
+        # Ensure the output directory exists
+        os.makedirs(self.output_dir, exist_ok=True)
+        self.notary_url = "https://a.pool.opentimestamps.org"
 
         # Flag to check if camera is valid/working
         self.online = False
@@ -129,6 +106,163 @@ class CameraWidget(QWidget):
         self.timer.start(1)
 
         print('Started camera: {}'.format(self.camera_stream_link))
+
+
+    def submit_attestation(self, frame_bytes, frame_hash, current_datetime, timeout):
+        # Convert the frame hash to a hexadecimal string
+        frame_hash_hex = frame_hash.hex()
+
+        # Write the original frame bytes directly to disk
+        image_file_path = os.path.join(self.output_dir, f"{current_datetime}_{frame_hash_hex}_original.jpg")
+        with open(image_file_path, 'wb') as f:
+            f.write(frame_bytes)
+        logging.info(f"Original frame bytes saved to {image_file_path}")
+
+        # Submit the attestation to each calendar URL
+        q = Queue()
+        self.submit_async(self.notary_url, frame_hash, q, timeout, f"{current_datetime}_{frame_hash_hex}.ots")
+
+        # Handle response
+        try:
+            result = q.get(block=True, timeout=timeout)
+            if isinstance(result, Timestamp):
+                logging.info("Attestation for frame submitted successfully.")
+            else:
+                logging.warning(f"Submission failed for frame: {result}")
+        except Empty:
+            logging.warning("Submission timed out for frame.")
+
+
+    def submit_async(self, calendar_url, attestation_data, queue, timeout, ots_filename):
+        """Submit the attestation to the calendar server asynchronously and write the serialized response to a file."""
+        logging.debug(f"Submitting attestation to {calendar_url} with data size: {len(attestation_data)} bytes")
+
+        # Log the actual content of attestation_data
+        logging.debug(f"Attestation data content: {attestation_data}")
+
+        # Check if attestation_data is empty
+        if not attestation_data:
+            logging.error("Attestation data is empty.")
+            queue.put("Attestation data is empty.")
+            return
+
+        try:
+            # Create a Timestamp object from attestation data
+            timestamp = Timestamp(attestation_data)
+            logging.debug(f"Created Timestamp: {timestamp}")
+
+            # Create a RemoteCalendar instance
+            calendar = RemoteCalendar(calendar_url)
+
+            # Submit the serialized data to the calendar
+            response_timestamp = calendar.submit(timestamp.msg, timeout=timeout)
+
+            # Create the file hash operation (e.g., SHA256)
+            file_hash_op = OpSHA256()  # Create an instance of the hash operation
+
+            # Serialize the response timestamp to the output file
+            timestamp_file_path = os.path.join(self.output_dir, ots_filename)
+            with open(timestamp_file_path, 'xb') as fd:
+                fd.write(HEADER_MAGIC)  # Write the header magic bytes
+                serialization_ctx = StreamSerializationContext(fd)
+                custom_timestamp_file = CustomDetachedTimestampFile(file_hash_op, response_timestamp)  # Pass the hash operation
+                custom_timestamp_file.serialize(serialization_ctx)
+
+            logging.info(f"Response written to {timestamp_file_path}")
+            queue.put(f"Response written to {timestamp_file_path}")
+
+        except requests.exceptions.Timeout:
+            logging.warning("Submission timed out.")
+            queue.put("Timeout")
+        except requests.exceptions.RequestException as e:
+            logging.error(f"An error occurred while submitting attestation: {e}")
+            queue.put(str(e))
+        except IOError as exp:
+            logging.error(f"Failed to create timestamp file: {exp}")
+            queue.put(f"Failed to create timestamp file: {exp}")
+
+
+    def save_frame(self, frame, frame_bytes, frame_hash, current_datetime, detected_people, do_timestamp):
+        
+        min_box_size = 0.0001  # Minimum area percentage of the frame
+        max_box_size = 0.02   # Maximum area percentage of the frame
+
+        for person in detected_people:
+            bbox = person['bbox']
+            class_id = person['class_id']
+
+            classname = (class_names[class_id] if class_id < len(class_names) else str(class_id))
+            score = str(round(person['score'],3))
+            
+
+            ymin, xmin, ymax, xmax = bbox
+            h, w, _ = frame.shape
+            xmin = int(xmin * w)
+            xmax = int(xmax * w)
+            ymin = int(ymin * h)
+            ymax = int(ymax * h)
+            # Calculate bounding box area as a percentage of the frame
+            box_area = (xmax - xmin) * (ymax - ymin) / (w * h)
+
+            label = classname + "__" + score
+            # Filter detections based on box area thresholds
+            if min_box_size < box_area < max_box_size:
+                if do_timestamp:
+                    self.submit_attestation(frame_bytes, frame_hash, current_datetime, timeout=10)
+                cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+                cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                # Convert the frame hash to a hexadecimal string
+                frame_hash_hex = frame_hash.hex()
+                # Save the frame with detections to disk
+                image_file_path = os.path.join(self.output_dir, f"{current_datetime}_{frame_hash_hex}_boxed.jpg")
+                #image_file_path = f"detected/detection_frame_{score}_{current_datetime}_{classname}.jpg"
+                cv2.imwrite(image_file_path, frame)
+                beep(1)
+            else:
+                print(f"{classname} with box area {box_area}")
+            break
+
+    def detect_people(self, frame):
+        #frame = cv2.resize(frame, (1024, 1024))
+        input_tensor = tf.convert_to_tensor(frame, dtype=tf.uint8)
+        input_tensor = tf.expand_dims(input_tensor, axis=0)
+        detections = detector(input_tensor)
+
+        detection_boxes = detections["detection_boxes"][0].numpy()
+        detection_classes = detections["detection_classes"][0].numpy().astype(np.uint32)
+        detection_scores = detections["detection_scores"][0].numpy()
+
+        detected_people = []
+
+        for i in range(detection_boxes.shape[0]):
+            class_id = detection_classes[i]
+            classname = (class_names[class_id] if class_id < len(class_names) else str(class_id))
+            if classname != 'horse' and classname != 'dog' and classname != 'cat' and classname != 'bird' and classname != 'toothbrush' and classname != 'teddy bear': 
+                continue
+            #if classname != 'bird':
+            #    continue
+            if classname == 'bird':
+                if detection_scores[i] > 0.5:
+                    detected_people.append({
+                        'class_id': detection_classes[i],
+                        'score': detection_scores[i],
+                        'bbox': detection_boxes[i]
+                    })
+                elif detection_scores[i] > 0.09 and detection_scores[i] < 0.5:
+                    print(f"{classname} with low score of {detection_scores[i]}")
+            else:
+                if detection_scores[i] > 0.13:
+                    detected_people.append({
+                        'class_id': detection_classes[i],
+                        'score': detection_scores[i],
+                        'bbox': detection_boxes[i]
+                    })
+                elif detection_scores[i] > 0.09 and detection_scores[i] < 0.13:
+                    print(f"{classname} with low score of {detection_scores[i]}")
+                
+
+        return detected_people
+
 
     def load_network_stream(self):
         """Verifies stream link and open new stream if valid"""
@@ -168,44 +302,28 @@ class CameraWidget(QWidget):
                         if self.frame_count % self.frame_skip_interval != 0:
                             self.capture.grab()
                             continue
-                        
-                        detected_people = detect_people(frame)
-                        min_box_size = 0.0001  # Minimum area percentage of the frame
-                        max_box_size = 0.02   # Maximum area percentage of the frame
-    
-                        for person in detected_people:
-                            bbox = person['bbox']
-                            class_id = person['class_id']
 
-                            classname = (class_names[class_id] if class_id < len(class_names) else str(class_id))
-                            score = str(round(person['score'],3))
-                            
+                        # Convert the frame to bytes (e.g., using JPEG encoding)
+                        _, buffer = cv2.imencode('.jpg', frame)
+                        frame_bytes = buffer.tobytes()
+                        # Create a SHA256 hash of the frame bytes
+                        frame_hash = hashlib.sha256(frame_bytes).digest()
+                        # Get the current date and time
+                        current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-                            ymin, xmin, ymax, xmax = bbox
-                            h, w, _ = frame.shape
-                            xmin = int(xmin * w)
-                            xmax = int(xmax * w)
-                            ymin = int(ymin * h)
-                            ymax = int(ymax * h)
-                            # Calculate bounding box area as a percentage of the frame
-                            box_area = (xmax - xmin) * (ymax - ymin) / (w * h)
+                        if OPERATION_MODE == 'detect':
+                            # Logic for object detection (always storing detected frames)
+                            self.detected_people = self.detect_people(frame)
+                            self.save_frame(frame, frame_bytes, frame_hash, current_datetime, self.detected_people, False)
 
-                            label = classname + "__" + score
-                            # Filter detections based on box area thresholds
-                            if min_box_size < box_area < max_box_size:
-                                cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-                                cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                            
-                                # Get the current date and time
-                                current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        elif OPERATION_MODE == 'timestamp':
+                            # Logic for timestamping all frames (always storing orignal)
+                            self.submit_attestation(frame_bytes, frame_hash, current_datetime, timeout=10)
 
-                                # Save the frame with detections to disk
-                                filename = f"detected/detection_frame_{score}_{current_datetime}_{classname}.jpg"
-                                cv2.imwrite(filename, frame)
-                                beep(1)
-                            else:
-                                print(f"{classname} with box area {box_area}")
-                            break
+                        elif OPERATION_MODE == 'detect_and_timestamp':
+                            # Logic for object detection and timestamping (always storing original and boxed)
+                            self.detected_people = self.detect_people(frame)
+                            self.save_frame(frame, frame_bytes, frame_hash, current_datetime, self.detected_people, True)
 
                         self.deque.append(frame)
                         
@@ -290,36 +408,36 @@ if __name__ == '__main__':
     password2 = os.environ.get('PASSWORD2')
     
     # Stream links
-    camera0 = 'rtsp://{}:{}@192.168.4.70:554/cam/realmonitor?channel=1&subtype=0'.format(username, password2)
-    camera1 = 'rtsp://{}:{}@192.168.4.60:554/cam/realmonitor?channel=1&subtype=0'.format(username, password2)
-    camera2 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=3&subtype=0'.format(username, password)
-    #camera3 = 'rtsp://{}:{}@192.168.4.94:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
-    #camera4 = 'rtsp://{}:{}@192.168.4.113:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
-    #camera5 = 'rtsp://{}:{}@192.168.4.55:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
-    #camera6 = 'rtsp://{}:{}@192.168.4.148:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
-    camera7 = 'rtsp://{}:{}@192.168.4.57:554/cam/realmonitor?channel=1&subtype=0'.format(username, password2)
-    camera8 = 'rtsp://{}:{}@192.168.4.81:554/cam/realmonitor?channel=1&subtype=0'.format(username, password2)
+    camera0 = 'rtsp://{}:{}@192.168.4.70:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera1 = 'rtsp://{}:{}@192.168.4.60:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera2 = 'rtsp://{}:{}@192.168.4.137:554/cam/realmonitor?channel=3&subtype=1'.format(username, password)
+    camera3 = 'rtsp://{}:{}@192.168.4.94:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera4 = 'rtsp://{}:{}@192.168.4.113:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera5 = 'rtsp://{}:{}@192.168.4.55:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera6 = 'rtsp://{}:{}@192.168.4.148:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera7 = 'rtsp://{}:{}@192.168.4.57:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
+    camera8 = 'rtsp://{}:{}@192.168.4.165:554/cam/realmonitor?channel=1&subtype=1'.format(username, password2)
     # Create camera widgets
     print('Creating Camera Widgets...')
-    zero = CameraWidget(screen_width//3, screen_height//3, camera0)
-    one = CameraWidget(screen_width//3, screen_height//3, camera1)
-    two = CameraWidget(screen_width//3, screen_height//3, camera2)
-    #three = CameraWidget(screen_width//3, screen_height//3, camera3)
-    #four = CameraWidget(screen_width//3, screen_height//3, camera4)
-    #five = CameraWidget(screen_width//3, screen_height//3, camera5)
-    #six = CameraWidget(screen_width//3, screen_height//3, camera6)
-    seven = CameraWidget(screen_width//3, screen_height//3, camera7)
-    eight = CameraWidget(screen_width//3, screen_height//3, camera8)
+    zero = CameraWidget(screen_width//3, screen_height//3, camera0, 0)
+    one = CameraWidget(screen_width//3, screen_height//3, camera1, 1)
+    two = CameraWidget(screen_width//3, screen_height//3, camera2, 2)
+    three = CameraWidget(screen_width//3, screen_height//3, camera3, 3)
+    four = CameraWidget(screen_width//3, screen_height//3, camera4, 4)
+    five = CameraWidget(screen_width//3, screen_height//3, camera5, 5)
+    six = CameraWidget(screen_width//3, screen_height//3, camera6, 6)
+    seven = CameraWidget(screen_width//3, screen_height//3, camera7, 7)
+    eight = CameraWidget(screen_width//3, screen_height//3, camera8, 8)
     
     # Add widgets to layout
     print('Adding widgets to layout...')
     ml.addWidget(zero.get_video_frame(),0,0,1,1)
     ml.addWidget(one.get_video_frame(),0,1,1,1)
     ml.addWidget(two.get_video_frame(),0,2,1,1)
-    #ml.addWidget(three.get_video_frame(),1,0,1,1)
-    #ml.addWidget(four.get_video_frame(),1,1,1,1)
-    #ml.addWidget(five.get_video_frame(),1,2,1,1)
-    #ml.addWidget(six.get_video_frame(),2,0,1,1)
+    ml.addWidget(three.get_video_frame(),1,0,1,1)
+    ml.addWidget(four.get_video_frame(),1,1,1,1)
+    ml.addWidget(five.get_video_frame(),1,2,1,1)
+    ml.addWidget(six.get_video_frame(),2,0,1,1)
     ml.addWidget(seven.get_video_frame(),2,1,1,1)
     ml.addWidget(eight.get_video_frame(),2,2,1,1)
     print('Verifying camera credentials...')

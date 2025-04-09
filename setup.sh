@@ -12,7 +12,7 @@ cd /home/alice/git3/pet-detector
 source ~/miniconda3/bin/activate
 conda activate tf
 
-python3 main.py
+python3 serving_default.py
 
 
 
