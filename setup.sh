@@ -10,7 +10,9 @@ pip install -r requirements.txt
 cd /home/alice/git3/pet-detector
 conda activate tf
 
-python3 serving_default.py
+chmod +x pet-detector.sh
+
+./pet-detector.sh
 
 
 
