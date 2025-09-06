@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Pet Detector
+Icon=utilities-terminal
+Exec=gnome-terminal -- bash -c "/home/alice/git3/pet-detector/pet-detector.sh; exec bash"
+Terminal=false
+Categories=Utility;
