@@ -1,9 +1,10 @@
 #sudo apt-get install qt6-tools-dev
 #sudo apt install libxcb-cursor0
+sudo apt install nvidia-cuda-toolkit
 cd /home/alice/git3/pet-detector
 conda create -n tf python=3.10
 conda activate tf
-conda install nvidia::cudnn cuda-version=11
+conda install nvidia::cudnn cuda-version=12
 pip install -r requirements.txt
 
 cd /home/alice/git3/pet-detector
@@ -12,8 +13,6 @@ conda activate tf
 python3 serving_default.py
 
 
-
-pip freeze > requirements.txt
 
 #https://tfhub.dev/s?module-type=image-object-detection
 #Download https://tfhub.dev/tensorflow/faster_rcnn/resnet50_v1_640x640/1
